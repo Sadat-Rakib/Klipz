@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: klipz-media
+    runtime: docker
+    plan: free
+    region: oregon
+    envVars:
+      - key: DEEPGRAM_API_KEY
+        sync: false # You will set this in the Render dashboard
+      - key: PORT
+        value: 10000
+    healthCheckPath: /

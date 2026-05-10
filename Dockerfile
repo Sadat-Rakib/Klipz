@@ -7,10 +7,8 @@ RUN apt-get update && \
 WORKDIR /app
 COPY requirements.txt .
 
-RUN pip install torch --index-url https://download.pytorch.org/whl/cpu --no-cache-dir
 RUN pip install --no-cache-dir -r requirements.txt
 
-ARG CACHEBUST=1
 COPY . .
 
 EXPOSE 8899

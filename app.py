@@ -6,6 +6,9 @@ import subprocess
 import threading
 import zipfile
 from flask import Flask, request, jsonify, send_file, render_template
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = Flask(__name__)
 app.config['TEMPLATES_AUTO_RELOAD'] = True
@@ -14,6 +17,25 @@ DOWNLOAD_DIR = os.path.join(os.path.dirname(__file__), "downloads")
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
 jobs = {}
+
+def response_to_srt(response):
+    """Helper to convert Deepgram response to SRT format"""
+    try:
+        results = response.results.channels[0].alternatives[0].words
+        srt = ""
+        for i, word in enumerate(results):
+            start = format_srt_time(word.start)
+            end = format_srt_time(word.end)
+            srt += f"{i+1}\n{start} --> {end}\n{word.punctuated_word or word.word}\n\n"
+        return srt
+    except: return None
+
+def format_srt_time(seconds):
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+    millis = int((seconds % 1) * 1000)
+    return f"{hours:02}:{minutes:02}:{secs:02},{millis:03}"
 
 
 def run_download(job_id, url, format_choice, format_id):
@@ -70,63 +92,40 @@ def run_download(job_id, url, format_choice, format_id):
         job["status"] = "transcribing"
         whisper_srt_files = []
 
-        # Only attempt transcription if whisper is importable
-        try:
-            import importlib.util
-            if importlib.util.find_spec("whisper") is not None:
-                audio_temp = os.path.join(DOWNLOAD_DIR, f"{job_id}_whisper_input.wav")
-                try:
-                    extract_cmd = [
-                        "ffmpeg", "-y", "-i", primary,
-                        "-vn", "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1",
-                        audio_temp
-                    ]
-                    extract_result = subprocess.run(
-                        extract_cmd, capture_output=True, timeout=60
-                    )
+        # Use Deepgram API for transcription
+        deepgram_key = os.environ.get("DEEPGRAM_API_KEY")
+        if deepgram_key:
+            job["status"] = "transcribing"
+            audio_temp = os.path.join(DOWNLOAD_DIR, f"{job_id}_whisper_input.wav")
+            try:
+                # Extract audio for Deepgram
+                extract_cmd = ["ffmpeg", "-y", "-i", primary, "-vn", "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1", audio_temp]
+                subprocess.run(extract_cmd, capture_output=True, timeout=60)
+
+                if os.path.exists(audio_temp):
+                    from deepgram import DeepgramClient, PrerecordedOptions, FileSource
+                    dg_client = DeepgramClient(deepgram_key)
                     
-                    if extract_result.returncode == 0 and os.path.exists(audio_temp):
-                        input_stem = os.path.splitext(os.path.basename(audio_temp))[0]
+                    with open(audio_temp, "rb") as file:
+                        buffer_data = file.read()
+                    
+                    for lang in ["en", "ar"]:
+                        options = PrerecordedOptions(model="nova-2", smart_format=True, language=lang)
+                        response = dg_client.listen.prerecorded.v("1").transcribe_file({"buffer": buffer_data}, options)
                         
-                        # English
-                        subprocess.run([
-                            "python", "-m", "whisper", audio_temp,
-                            "--language", "en", "--task", "transcribe",
-                            "--output_format", "srt", "--output_dir", DOWNLOAD_DIR,
-                            "--model", "small"
-                        ], capture_output=True, timeout=300)
-                        
-                        en_raw = os.path.join(DOWNLOAD_DIR, f"{input_stem}.srt")
-                        en_final = os.path.join(DOWNLOAD_DIR, f"{job_id}_english.srt")
-                        if os.path.exists(en_raw):
-                            os.rename(en_raw, en_final)
-                            whisper_srt_files.append(en_final)
-                        
-                        # Arabic
-                        subprocess.run([
-                            "python", "-m", "whisper", audio_temp,
-                            "--language", "ar", "--task", "transcribe",
-                            "--output_format", "srt", "--output_dir", DOWNLOAD_DIR,
-                            "--model", "small"
-                        ], capture_output=True, timeout=300)
-                        
-                        ar_raw = os.path.join(DOWNLOAD_DIR, f"{input_stem}.srt")
-                        ar_final = os.path.join(DOWNLOAD_DIR, f"{job_id}_arabic.srt")
-                        if os.path.exists(ar_raw):
-                            os.rename(ar_raw, ar_final)
-                            whisper_srt_files.append(ar_final)
-                
-                except subprocess.TimeoutExpired:
-                    job["whisper_error"] = "Whisper timed out — video saved without transcription"
-                except Exception as whisper_err:
-                    job["whisper_error"] = str(whisper_err)
-                finally:
-                    audio_temp_path = os.path.join(DOWNLOAD_DIR, f"{job_id}_whisper_input.wav")
-                    if os.path.exists(audio_temp_path):
-                        try: os.remove(audio_temp_path)
-                        except: pass
-        except Exception:
-            pass  # Whisper entirely unavailable — skip silently
+                        srt_content = response_to_srt(response)
+                        if srt_content:
+                            suffix = "english" if lang == "en" else "arabic"
+                            srt_path = os.path.join(DOWNLOAD_DIR, f"{job_id}_{suffix}.srt")
+                            with open(srt_path, "w", encoding="utf-8") as f:
+                                f.write(srt_content)
+                            whisper_srt_files.append(srt_path)
+            except Exception as dg_err:
+                job["whisper_error"] = f"Deepgram Error: {str(dg_err)}"
+            finally:
+                if os.path.exists(audio_temp):
+                    try: os.remove(audio_temp)
+                    except: pass
 
         # Combine all subtitles
         if whisper_srt_files:

@@ -1,0 +1,14 @@
+services:
+  klipz:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: klipz_app
+    ports:
+      - "8899:8899"
+    volumes:
+      - ./downloads:/app/downloads
+    environment:
+      - PORT=8899
+      - HOST=0.0.0.0
+    restart: always
