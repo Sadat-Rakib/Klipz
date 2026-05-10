@@ -1,0 +1,1214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Klipz — Media Downloader</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Mono:wght@400;500&display=swap&v=2" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+  <style>
+    :root {
+      --bg: #070d0f;
+      --bg-section: #0a1628;
+      --fg: #e8f5f0;
+      --accent: #00c896;
+      --accent-2: #0ea5e9;
+      --accent-hover: #00b085;
+      --muted: #5a8a7a;
+      --card: rgba(10, 28, 40, 0.7);
+      --card-border: rgba(0, 200, 150, 0.15);
+      --success: #00c896;
+      --error: #ef4444;
+      --radius: 16px;
+      --shimmer: linear-gradient(90deg, #0a1a14 25%, #0f2a20 50%, #0a1a14 75%);
+      --glass-bg: rgba(0, 200, 150, 0.04);
+      --glass-border: rgba(0, 200, 150, 0.18);
+      --glass-blur: blur(20px);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'DM Mono', monospace;
+      background: var(--bg);
+      color: var(--fg);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Navbar */
+    .nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 72px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 40px;
+      z-index: 1000;
+      backdrop-filter: blur(12px);
+      background: rgba(7, 13, 15, 0.5);
+      border-bottom: 1px solid var(--glass-border);
+      color: var(--fg);
+    }
+    .nav-brand {
+      font-family: 'Instrument Serif', serif;
+      font-size: 1.8rem;
+      letter-spacing: -0.02em;
+    }
+    .nav-link {
+      color: #fff;
+      text-decoration: none;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      padding: 8px 18px;
+      cursor: pointer;
+    }
+
+    /* Liquid Glass */
+    .liquid-glass {
+      position: relative;
+      background: rgba(0, 200, 150, 0.08);
+      border: 1px solid rgba(0, 200, 150, 0.25);
+      border-radius: 999px;
+      backdrop-filter: blur(20px) saturate(180%);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      box-shadow:
+        0 0 0 1px rgba(0, 200, 150, 0.1) inset,
+        0 8px 32px rgba(0, 200, 150, 0.08),
+        0 2px 8px rgba(0, 14, 50, 0.4);
+      color: #fff;
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+      overflow: hidden;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+    }
+    .liquid-glass::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 50%;
+      background: linear-gradient(180deg, rgba(255,255,255,0.07) 0%, transparent 100%);
+      border-radius: 999px 999px 0 0;
+      pointer-events: none;
+    }
+    .liquid-glass:hover {
+      background: rgba(0, 200, 150, 0.18);
+      border-color: rgba(0, 200, 150, 0.5);
+      box-shadow:
+        0 0 0 1px rgba(0, 200, 150, 0.2) inset,
+        0 12px 40px rgba(0, 200, 150, 0.2),
+        0 4px 12px rgba(0, 14, 50, 0.5);
+      transform: translateY(-1px);
+    }
+
+    /* Hero */
+    .hero {
+      position: relative;
+      height: 100vh;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      background: #000;
+      color: #fff;
+      text-align: center;
+    }
+    .hero-video {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      object-fit: cover;
+      z-index: 0;
+    }
+    .hero-overlay {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at center, rgba(7, 13, 15, 0.4), rgba(7, 13, 15, 0.9));
+      z-index: 1;
+    }
+    .hero-content {
+      position: relative;
+      z-index: 2;
+      max-width: 800px;
+      padding: 0 24px;
+    }
+    .hero-h1 {
+      font-family: 'Instrument Serif', serif;
+      font-size: clamp(3rem, 8vw, 6rem);
+      line-height: 0.9;
+      font-weight: 400;
+      text-shadow: 0 0 40px rgba(0,200,150,0.3);
+      margin-bottom: 24px;
+    }
+    .hero-h1 em { font-style: italic; color: var(--accent); }
+
+    .scroll-arrow {
+      position: absolute;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 2;
+      animation: bounce 2s infinite;
+      cursor: pointer;
+    }
+    @keyframes bounce {
+      0%, 20%, 50%, 80%, 100% {transform: translateX(-50%) translateY(0);}
+      40% {transform: translateX(-50%) translateY(-10px);}
+      60% {transform: translateX(-50%) translateY(-5px);}
+    }
+
+    /* Main Content Section */
+    .page {
+      background: linear-gradient(180deg, var(--bg) 0%, var(--bg-section) 10%, var(--bg-section) 90%, var(--bg) 100%);
+      padding: 120px 24px;
+      position: relative;
+      z-index: 10;
+    }
+
+    .brand { margin-bottom: 48px; text-align: center; }
+    .brand h1 {
+      font-family: 'Instrument Serif', serif;
+      font-size: 4.2rem;
+      font-weight: 400;
+      letter-spacing: -0.03em;
+      line-height: 1;
+      color: var(--fg);
+    }
+    .brand h1 em { font-style: italic; color: var(--accent); }
+    .brand p {
+      margin-top: 10px;
+      font-size: 0.78rem;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    textarea {
+      width: 100%;
+      padding: 18px 20px;
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius);
+      background: rgba(10, 28, 40, 0.6);
+      color: var(--fg);
+      font-family: 'DM Mono', monospace;
+      font-size: 0.88rem;
+      outline: none;
+      resize: none;
+      min-height: 56px;
+      transition: border-color 0.25s, box-shadow 0.25s;
+      margin-bottom: 6px;
+      backdrop-filter: blur(12px);
+    }
+    textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(0, 200, 150, 0.1);
+    }
+    textarea::placeholder { color: var(--muted); }
+
+    .hint {
+      font-size: 0.7rem;
+      color: var(--muted);
+      margin-bottom: 24px;
+      letter-spacing: 0.02em;
+      text-align: center;
+    }
+
+    .controls {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 6px;
+      align-items: center;
+      max-width: 500px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .pill-group {
+      display: flex;
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      overflow: hidden;
+      background: rgba(10, 28, 40, 0.4);
+      backdrop-filter: blur(10px);
+    }
+    .pill {
+      padding: 10px 20px;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.76rem;
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.2s;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+    .pill.active { background: var(--accent); color: #000; }
+    .pill:not(.active):hover { color: var(--fg); }
+
+    .fetch-btn {
+      flex: 1;
+      padding: 12px 24px;
+      border: 1px solid rgba(0, 200, 150, 0.25);
+      border-radius: 12px !important;
+      background: linear-gradient(135deg, rgba(0,200,150,0.25), rgba(14,165,233,0.25));
+      color: #fff;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.82rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .fetch-btn:hover {
+      background: linear-gradient(135deg, rgba(0,200,150,0.35), rgba(14,165,233,0.35));
+      border-color: rgba(0, 200, 150, 0.5);
+      transform: translateY(-1px);
+    }
+    .fetch-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    /* Cards */
+    .cards { margin-top: 40px; max-width: 620px; margin-left: auto; margin-right: auto; }
+
+    .card {
+      display: flex;
+      gap: 14px;
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius);
+      background: rgba(10, 28, 40, 0.7);
+      padding: 16px;
+      margin-bottom: 16px;
+      backdrop-filter: blur(12px);
+      animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .card-thumb {
+      width: 120px;
+      min-width: 120px;
+      height: 80px;
+      border-radius: 8px;
+      overflow: hidden;
+      background: rgba(0,0,0,0.2);
+      flex-shrink: 0;
+      position: relative;
+    }
+    .card-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .card-thumb .no-thumb {
+      width: 100%; height: 100%;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--muted);
+    }
+    .card-thumb .no-thumb svg { width: 28px; height: 28px; opacity: 0.5; }
+
+    .card-thumb.loading {
+      background: var(--shimmer);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+    }
+    .skeleton-line {
+      height: 12px; border-radius: 4px;
+      background: var(--shimmer); background-size: 200% 100%;
+      animation: shimmer 1.5s infinite; margin-bottom: 6px;
+    }
+    .skeleton-line.short { width: 40%; height: 10px; }
+    .skeleton-line.medium { width: 75%; }
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    .card-body {
+      flex: 1; min-width: 0;
+      display: flex; flex-direction: column; justify-content: center;
+    }
+    .card-title {
+      font-family: 'Instrument Serif', serif;
+      font-size: 1.1rem; line-height: 1.3;
+      color: var(--fg); margin-bottom: 4px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .card-meta {
+      font-size: 0.7rem; color: var(--muted);
+      letter-spacing: 0.03em; text-transform: uppercase; margin-bottom: 12px;
+    }
+
+    .card-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+    .card-dl-btn {
+      padding: 8px 16px; border-radius: 8px;
+      font-family: 'DM Mono', monospace; font-size: 0.75rem; font-weight: 500;
+      cursor: pointer; letter-spacing: 0.03em; text-transform: uppercase;
+    }
+    .card-dl-btn.done { background: rgba(0, 200, 150, 0.3); border-color: var(--accent); }
+    .card-dl-btn.error { background: rgba(239, 68, 68, 0.2); border-color: var(--error); }
+
+    .card-status { font-size: 0.68rem; color: var(--muted); }
+    .card-status.downloading { color: var(--accent); }
+    .card-status.done { color: var(--success); }
+    .card-status.error { color: var(--error); }
+
+    .q-chip {
+      padding: 4px 12px; border: 1px solid var(--glass-border);
+      border-radius: 8px; background: rgba(255,255,255,0.03); color: var(--muted);
+      font-family: 'DM Mono', monospace; font-size: 0.65rem;
+      cursor: pointer; transition: all 0.2s;
+    }
+    .q-chip.active { border-color: var(--accent); color: var(--accent); background: rgba(0,200,150,0.1); }
+    .q-chip:hover:not(.active) { border-color: var(--muted); }
+
+    /* HIW Section */
+    .how-it-works {
+      background: var(--bg);
+      padding: 120px 24px;
+      position: relative;
+      overflow: hidden;
+    }
+    .how-it-works::before {
+      content: '';
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%,-50%);
+      width: 800px; height: 400px;
+      background: radial-gradient(ellipse, rgba(0,200,150,0.06) 0%, rgba(14,165,233,0.04) 50%, transparent 70%);
+      pointer-events: none;
+    }
+    .hiw-inner { max-width: 1100px; margin: 0 auto; }
+    .hiw-header { text-align: center; margin-bottom: 72px; }
+    .hiw-title {
+      font-family: 'Instrument Serif', serif;
+      font-size: clamp(2.4rem, 5vw, 3.8rem);
+      font-weight: 400;
+      color: var(--fg);
+      letter-spacing: -0.02em;
+      margin-bottom: 16px;
+    }
+    .hiw-sub { color: var(--muted); font-size: 0.9rem; letter-spacing: 0.04em; text-transform: uppercase; }
+    .hiw-cards {
+      display: flex;
+      gap: 24px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .hiw-card {
+      background: rgba(10, 28, 40, 0.6);
+      border: 1px solid var(--glass-border);
+      border-radius: 24px;
+      padding: 36px 28px;
+      width: 320px;
+      min-height: 380px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      backdrop-filter: blur(20px);
+      transition: transform 0.4s cubic-bezier(0.16,1,0.3,1), box-shadow 0.4s;
+      position: relative;
+      overflow: hidden;
+    }
+    .hiw-card::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 50%;
+      transform: translateX(-50%);
+      width: 320px; height: 200px;
+      background: linear-gradient(180deg, transparent, rgba(0,200,150,0) 60%, rgba(0,200,150,0.12) 100%);
+      opacity: 0;
+      transition: opacity 0.5s;
+      border-radius: 0 0 24px 24px;
+      pointer-events: none;
+    }
+    .hiw-card:hover { transform: translateY(-10px); box-shadow: 0 24px 60px rgba(0,200,150,0.12); }
+    .hiw-card:hover::after { opacity: 1; }
+    .hiw-card--center {
+      background: rgba(6, 18, 30, 0.85);
+      border-color: rgba(0,200,150,0.3);
+      z-index: 1;
+    }
+    .hiw-num {
+      font-size: 3rem;
+      font-weight: 900;
+      color: rgba(0,200,150,0.25);
+      letter-spacing: -0.04em;
+      line-height: 1;
+    }
+    .hiw-visual {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 12px;
+    }
+    .hiw-url-bar {
+      background: rgba(0,200,150,0.06);
+      border: 1px solid var(--glass-border);
+      border-radius: 10px;
+      padding: 12px 16px;
+      font-size: 0.75rem;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      overflow: hidden;
+    }
+    .hiw-url-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+    .hiw-cursor {
+      color: var(--accent);
+      animation: blink 1s infinite;
+      font-weight: bold;
+    }
+    @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0; } }
+    .hiw-paste-btn {
+      background: linear-gradient(135deg, rgba(0,200,150,0.2), rgba(14,165,233,0.2));
+      border: 1px solid var(--glass-border);
+      border-radius: 10px;
+      padding: 10px;
+      text-align: center;
+      font-size: 0.8rem;
+      color: var(--accent);
+      letter-spacing: 0.04em;
+      backdrop-filter: blur(10px);
+    }
+    .hiw-format-row { display: flex; gap: 8px; }
+    .hiw-format-chip {
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.03);
+      font-size: 0.7rem;
+      color: var(--muted);
+      letter-spacing: 0.03em;
+      flex: 1;
+      text-align: center;
+    }
+    .hiw-format-chip--active {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(0,200,150,0.1);
+    }
+    .hiw-fetch-bar {
+      height: 3px;
+      border-radius: 99px;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      animation: fetchBar 2.5s ease-in-out infinite;
+      transform-origin: left;
+    }
+    @keyframes fetchBar {
+      0% { width: 0%; opacity: 1; }
+      70% { width: 100%; opacity: 1; }
+      100% { width: 100%; opacity: 0; }
+    }
+    .hiw-fetch-anim { padding: 4px 0; }
+    .hiw-visual--download { align-items: center; }
+    .hiw-dl-icon { color: var(--accent); animation: dlPulse 2s ease-in-out infinite; }
+    @keyframes dlPulse {
+      0%,100% { transform: translateY(0); }
+      50% { transform: translateY(6px); }
+    }
+    .hiw-dl-label { font-size: 0.75rem; color: var(--muted); letter-spacing: 0.04em; }
+    .hiw-dl-progress {
+      width: 100%;
+      height: 4px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+    .hiw-dl-bar {
+      height: 100%;
+      border-radius: 99px;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      animation: dlProgress 2s cubic-bezier(0.4,0,0.2,1) infinite;
+    }
+    @keyframes dlProgress {
+      0% { width: 0%; }
+      80% { width: 100%; }
+      100% { width: 100%; opacity: 0; }
+    }
+    .hiw-card-title {
+      font-family: 'Instrument Serif', serif;
+      font-size: 1.2rem;
+      color: var(--fg);
+      font-weight: 400;
+    }
+    .hiw-card-desc { font-size: 0.78rem; color: var(--muted); line-height: 1.7; }
+
+    /* Footer */
+    .velara-footer {
+      background: #070d0f;
+      color: rgba(255,255,255,0.5);
+      font-family: 'DM Mono', monospace;
+      overflow: hidden;
+      position: relative;
+    }
+    .vf-globe-wrap {
+      position: relative;
+      width: 100%;
+      height: 380px;
+      overflow: hidden;
+    }
+    .vf-globe-svg { width: 100%; height: 100%; }
+    .vf-badge {
+      position: absolute;
+      background: rgba(10,20,15,0.8);
+      border: 1px solid rgba(0,200,150,0.25);
+      border-radius: 8px;
+      padding: 8px 16px;
+      font-size: 0.78rem;
+      color: rgba(255,255,255,0.7);
+      white-space: nowrap;
+      backdrop-filter: blur(8px);
+      transition: all 0.7s ease;
+      opacity: 0.4;
+    }
+    .vf-badge.active {
+      opacity: 1;
+      color: #fff;
+      border-color: var(--accent);
+      transform: translateY(-6px) scale(1.05);
+      box-shadow: 0 8px 32px rgba(0,200,150,0.2);
+    }
+    .vf-links {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 40px;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 64px 40px;
+      border-top: 1px solid rgba(0,200,150,0.06);
+    }
+    .vf-col h4 { color: #fff; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 20px; }
+    .vf-col a {
+      display: block;
+      color: rgba(255,255,255,0.4);
+      text-decoration: none;
+      font-size: 0.78rem;
+      margin-bottom: 12px;
+      letter-spacing: 0.02em;
+      transition: color 0.2s;
+    }
+    .vf-col a:hover { color: var(--accent); }
+    .vf-platforms {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 40px 48px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .vf-plat-btn {
+      padding: 10px 24px;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.75rem;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      color: rgba(255,255,255,0.6);
+      border-radius: 8px !important;
+      transition: color 0.3s;
+    }
+    .vf-plat-btn:hover { color: #fff; }
+    .vf-divider { border-top: 1px dashed rgba(0,200,150,0.1); margin: 0 40px; }
+    .vf-giant-wrap {
+      position: relative;
+      width: 100%;
+      height: 340px;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .vf-giant {
+      font-size: clamp(120px, 22vw, 320px);
+      font-weight: 900;
+      letter-spacing: -0.05em;
+      color: transparent;
+      -webkit-text-stroke: 1px rgba(0,200,150,0.12);
+      background: linear-gradient(180deg, rgba(0,200,150,0.15) 0%, transparent 70%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      white-space: nowrap;
+      user-select: none;
+      animation: vfPulse 4s ease-in-out infinite;
+      text-align: center;
+    }
+    @keyframes vfPulse {
+      0%,100% { opacity: 0.8; }
+      50% { opacity: 1; }
+    }
+    .vf-bottom {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px 40px;
+      font-size: 0.65rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      z-index: 2;
+    }
+
+    .spin {
+      display: inline-block; width: 10px; height: 10px;
+      border: 2px solid currentColor; border-right-color: transparent;
+      border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Mobile */
+    @media (max-width: 768px) {
+      .nav { padding: 0 20px; }
+      .brand h1 { font-size: 3rem; }
+      .page { padding: 80px 16px 100px; }
+      .card { flex-direction: column; gap: 10px; }
+      .card-thumb { width: 100%; min-width: unset; height: 160px; }
+      .card-title { white-space: normal; }
+      .controls { flex-direction: column; }
+      .fetch-btn { width: 100%; }
+      .hiw-cards { flex-direction: column; align-items: center; }
+      .hiw-card { width: 100%; max-width: 380px; }
+      .vf-links { grid-template-columns: repeat(2,1fr); padding: 40px 20px; gap: 24px; }
+      .vf-platforms { padding: 0 20px 32px; }
+      .vf-bottom { flex-direction: column; gap: 16px; text-align: center; padding: 20px; position: relative; }
+      .vf-giant { font-size: 22vw; }
+    }
+    /* Tighten download section */
+    .page .brand h1 { 
+      background: linear-gradient(135deg, var(--fg) 0%, var(--accent) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    textarea { 
+      max-width: 560px; 
+      display: block; 
+      margin: 0 auto 6px;
+      border-color: rgba(0,200,150,0.2);
+    }
+    textarea:focus { 
+      border-color: var(--accent);
+      box-shadow: 0 0 0 4px rgba(0,200,150,0.08), 0 0 20px rgba(0,200,150,0.05);
+    }
+    .controls { max-width: 560px; }
+    .cards { max-width: 560px; }
+  </style>
+</head>
+<body>
+
+  <nav class="nav">
+    <div class="nav-brand">Klipz</div>
+    <a href="#downloader" class="nav-link liquid-glass">Download Now</a>
+  </nav>
+
+  <section class="hero">
+    <video class="hero-video" autoplay muted loop playsinline src="https://pub-2df60d97ace544a68c00aa294c98f8e5.r2.dev/Kelo/i-want-all-the-flowers-in-this-image-to-move-there.mp4"></video>
+    <div class="hero-overlay"></div>
+    <div class="hero-content">
+      <h1 class="hero-h1">
+        Every Video.<br>
+        One <em>Click.</em><br>
+        <span style="font-size:0.55em; opacity:0.7; display:block; margin-top:16px; font-style:normal; letter-spacing:0.05em; text-transform:uppercase; font-family:'DM Mono',monospace;">Download from any platform — offline forever</span>
+      </h1>
+      <p style="color:rgba(255,255,255,0.6); font-size:0.9rem; letter-spacing:0.04em; margin-top:24px; max-width:480px; margin-left:auto; margin-right:auto; line-height:1.7;">
+        YouTube · TikTok · Instagram · Twitter/X · Reddit · Facebook<br>and 1000+ more platforms
+      </p>
+    </div>
+    <div class="scroll-arrow" onclick="document.querySelector('#downloader').scrollIntoView()">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 13l5 5 5-5M7 6l5 5 5-5"/></svg>
+    </div>
+  </section>
+
+  <div id="downloader" class="page">
+    <div class="brand">
+      <h1>K<em>lipz</em></h1>
+      <p>Media Downloader</p>
+    </div>
+
+    <textarea id="urls" placeholder="Paste one or more URLs..." rows="2"></textarea>
+    <p class="hint">Multiple links? Separate with spaces, commas, or newlines.</p>
+
+    <div class="controls">
+      <div class="pill-group">
+        <button class="pill active liquid-glass" data-format="video" onclick="setFormat(this)">MP4</button>
+        <button class="pill liquid-glass" data-format="audio" onclick="setFormat(this)">MP3</button>
+      </div>
+      <button class="fetch-btn liquid-glass" id="goBtn" onclick="go()">Fetch</button>
+    </div>
+
+    <div id="cards" class="cards"></div>
+  </div>
+
+<section class="how-it-works">
+  <div class="hiw-inner">
+    <div class="hiw-header">
+      <h2 class="hiw-title">How Klipz Works</h2>
+      <p class="hiw-sub">Three steps. Any platform. Your device.</p>
+    </div>
+    <div class="hiw-cards">
+
+      <div class="hiw-card">
+        <div class="hiw-num">01</div>
+        <div class="hiw-visual">
+          <div class="hiw-url-bar">
+            <span class="hiw-url-text">https://youtube.com/watch?v=...</span>
+            <span class="hiw-cursor">|</span>
+          </div>
+          <div class="hiw-paste-btn">Paste Link</div>
+        </div>
+        <h3 class="hiw-card-title">Paste any URL</h3>
+        <p class="hiw-card-desc">Drop a link from YouTube, TikTok, Instagram, or 1000+ other platforms into Klipz.</p>
+      </div>
+
+      <div class="hiw-card hiw-card--center">
+        <div class="hiw-num">02</div>
+        <div class="hiw-visual hiw-visual--formats">
+          <div class="hiw-format-row">
+            <div class="hiw-format-chip hiw-format-chip--active">MP4 · 1080p</div>
+            <div class="hiw-format-chip">MP4 · 720p</div>
+          </div>
+          <div class="hiw-format-row">
+            <div class="hiw-format-chip">MP4 · 480p</div>
+            <div class="hiw-format-chip">MP3 Audio</div>
+          </div>
+          <div class="hiw-fetch-anim">
+            <div class="hiw-fetch-bar"></div>
+          </div>
+        </div>
+        <h3 class="hiw-card-title">Choose quality & format</h3>
+        <p class="hiw-card-desc">Pick MP4 in any resolution or extract MP3 audio. Klipz fetches the best available stream.</p>
+      </div>
+
+      <div class="hiw-card">
+        <div class="hiw-num">03</div>
+        <div class="hiw-visual hiw-visual--download">
+          <div class="hiw-dl-icon">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          </div>
+          <div class="hiw-dl-label">Saved to device</div>
+          <div class="hiw-dl-progress"><div class="hiw-dl-bar"></div></div>
+        </div>
+        <h3 class="hiw-card-title">Download & watch offline</h3>
+        <p class="hiw-card-desc">Your file saves directly. Watch anytime, no internet needed — even in low-connectivity zones.</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<footer class="velara-footer">
+
+  <!-- Globe arc SVG with platform dots -->
+  <div class="vf-globe-wrap">
+    <svg viewBox="0 0 1400 380" class="vf-globe-svg" preserveAspectRatio="xMidYMax slice">
+      <defs>
+        <radialGradient id="vfPlanet" cx="50%" cy="100%" r="100%">
+          <stop offset="0%" stop-color="#00c896" stop-opacity="0.5"/>
+          <stop offset="50%" stop-color="#0a2a1a" stop-opacity="0.8"/>
+          <stop offset="100%" stop-color="#000000"/>
+        </radialGradient>
+        <filter id="vfGlow">
+          <feGaussianBlur stdDeviation="6" result="blur"/>
+          <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+        </filter>
+      </defs>
+      <ellipse cx="700" cy="380" rx="900" ry="200" fill="url(#vfPlanet)"/>
+      <ellipse cx="700" cy="390" rx="860" ry="190" fill="none" stroke="#00c896" stroke-width="2" opacity="0.7"/>
+      <ellipse cx="700" cy="390" rx="860" ry="190" fill="none" stroke="#00c896" stroke-width="10" opacity="0.1" filter="url(#vfGlow)"/>
+      <!-- Platform dots at: 180, 370, 650, 870, 1150 -->
+      <circle class="vf-dot" id="vfd0" cx="180" cy="0" r="5" fill="#00c896" opacity="0.5"/>
+      <circle class="vf-dot" id="vfd1" cx="370" cy="0" r="5" fill="#00c896" opacity="0.5"/>
+      <circle class="vf-dot" id="vfd2" cx="650" cy="0" r="5" fill="#00c896" opacity="0.5"/>
+      <circle class="vf-dot" id="vfd3" cx="870" cy="0" r="5" fill="#00c896" opacity="0.5"/>
+      <circle class="vf-dot" id="vfd4" cx="1150" cy="0" r="5" fill="#00c896" opacity="0.5"/>
+    </svg>
+
+    <!-- Platform badges positioned over the arc -->
+    <div class="vf-badge" id="vfb0" style="left:8%;top:45%">YouTube</div>
+    <div class="vf-badge" id="vfb1" style="left:22%;top:32%">Instagram</div>
+    <div class="vf-badge" id="vfb2" style="left:44%;top:18%">TikTok</div>
+    <div class="vf-badge" id="vfb3" style="left:61%;top:27%">Twitter/X</div>
+    <div class="vf-badge" id="vfb4" style="left:80%;top:42%">Facebook</div>
+  </div>
+
+  <!-- Links grid -->
+  <div class="vf-links">
+    <div class="vf-col">
+      <h4>Klipz</h4>
+      <a href="#">About</a>
+      <a href="#">How it Works</a>
+      <a href="#">Pricing</a>
+      <a href="#">Changelog</a>
+    </div>
+    <div class="vf-col">
+      <h4>Platforms</h4>
+      <a href="#">YouTube</a>
+      <a href="#">TikTok</a>
+      <a href="#">Instagram</a>
+      <a href="#">Twitter/X</a>
+    </div>
+    <div class="vf-col">
+      <h4>Support</h4>
+      <a href="#">Help Center</a>
+      <a href="#">Privacy Policy</a>
+      <a href="#">Terms</a>
+      <a href="#">Contact</a>
+    </div>
+    <div class="vf-col">
+      <h4>Community</h4>
+      <a href="#">Gaza Solidarity</a>
+      <a href="#">Open Source</a>
+      <a href="#">Contribute</a>
+      <a href="#">Donate</a>
+    </div>
+  </div>
+
+  <!-- Social platform pill buttons -->
+  <div class="vf-platforms">
+    <button class="liquid-glass vf-plat-btn">YouTube</button>
+    <button class="liquid-glass vf-plat-btn">TikTok</button>
+    <button class="liquid-glass vf-plat-btn">Instagram</button>
+    <button class="liquid-glass vf-plat-btn">Twitter/X</button>
+    <button class="liquid-glass vf-plat-btn">Reddit</button>
+    <button class="liquid-glass vf-plat-btn">Facebook</button>
+    <button class="liquid-glass vf-plat-btn">Vimeo</button>
+  </div>
+
+  <!-- Divider -->
+  <div class="vf-divider"></div>
+
+  <!-- Giant brand text -->
+  <div class="vf-giant-wrap">
+    <div class="vf-giant">KLIPZ</div>
+    <div style="position:absolute;inset-x:0;bottom:0;height:80px;background:linear-gradient(to top,#070d0f,transparent);z-index:1;"></div>
+  </div>
+
+  <!-- Bottom bar inside giant text section -->
+  <div class="vf-bottom">
+    <div>© 2026 Klipz. All rights reserved.</div>
+    <div>Made with ❤ for Gaza</div>
+    <button onclick="window.scrollTo(0,0)" class="liquid-glass" style="padding:8px 20px;font-size:0.65rem;letter-spacing:0.1em;text-transform:uppercase;border:none;cursor:pointer;">↑ Back to top</button>
+  </div>
+
+</footer>
+
+  <script>
+    // GSAP Animations
+    gsap.registerPlugin(ScrollTrigger);
+
+    gsap.from(".hiw-card", {
+      scrollTrigger: { trigger: ".how-it-works", start: "top 75%", end: "top 30%", scrub: 0.5 },
+      y: 50, opacity: 0, stagger: 0.15, duration: 1, ease: "power3.out"
+    });
+    gsap.from(".hiw-title", {
+      scrollTrigger: { trigger: ".how-it-works", start: "top 80%" },
+      y: 30, opacity: 0, duration: 0.8, ease: "power3.out"
+    });
+
+    // Velara footer badge cycling
+    const vfBadges = document.querySelectorAll('.vf-badge');
+    let vfActive = 0;
+    function cycleVfBadge() {
+      if (vfBadges.length === 0) return;
+      vfBadges.forEach(b => b.classList.remove('active'));
+      vfBadges[vfActive].classList.add('active');
+      vfActive = (vfActive + 1) % vfBadges.length;
+    }
+    cycleVfBadge();
+    setInterval(cycleVfBadge, 2500);
+
+    // App Logic
+    let currentFormat = 'video';
+    let cardData = [];
+
+    function setFormat(btn) {
+      document.querySelectorAll('.pill').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentFormat = btn.dataset.format;
+    }
+
+    function parseUrls(text) {
+      return [...new Set(text.split(/[\s,]+/).map(u => u.trim()).filter(u => u.startsWith('http')))];
+    }
+
+    function fmtDur(s) {
+      if (!s) return '';
+      const m = Math.floor(s / 60);
+      const sec = Math.floor(s % 60);
+      return `${m}:${sec.toString().padStart(2, '0')}`;
+    }
+
+    function esc(s) {
+      const d = document.createElement('div');
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    function friendlyError(err) {
+      if (err.includes('Unsupported URL')) return 'This URL is not supported';
+      if (err.includes('Video unavailable')) return 'Video is unavailable or private';
+      if (err.includes('Private video')) return 'This video is private';
+      if (err.includes('HTTP Error 403')) return 'Access denied by the platform';
+      if (err.includes('HTTP Error 404')) return 'Video not found';
+      if (err.includes('copyright')) return 'Video blocked due to copyright';
+      if (err.includes('geo')) return 'Video not available in your region';
+      if (err.includes('timed out') || err.includes('Timed out')) return 'Request timed out — try again';
+      if (err.includes('network') || err.includes('Network')) return 'Network error — check your connection';
+      return err.length > 80 ? err.slice(0, 80) + '...' : err;
+    }
+
+    document.getElementById('urls').addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); go(); }
+    });
+
+    async function go() {
+      const urls = parseUrls(document.getElementById('urls').value);
+      if (!urls.length) return;
+
+      const btn = document.getElementById('goBtn');
+      const container = document.getElementById('cards');
+      btn.disabled = true;
+      btn.textContent = 'Loading...';
+      container.innerHTML = '';
+      cardData = [];
+
+      for (let i = 0; i < urls.length; i++) {
+        const url = urls[i];
+        const idx = cardData.length;
+        cardData.push({ url, status: 'loading' });
+        renderCard(idx);
+
+        try {
+          const res = await fetch('/api/info', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url }),
+          });
+          const data = await res.json();
+          if (data.error) {
+            cardData[idx] = { ...cardData[idx], status: 'info-error', error: data.error };
+          } else {
+            cardData[idx] = {
+              ...cardData[idx],
+              status: 'ready',
+              title: data.title || '',
+              thumbnail: data.thumbnail || '',
+              duration: data.duration,
+              uploader: data.uploader || '',
+              formats: data.formats || [],
+              selectedFormatId: data.formats?.[0]?.id || null,
+            };
+          }
+        } catch (err) {
+          cardData[idx] = { ...cardData[idx], status: 'info-error', error: err.message };
+        }
+        renderCard(idx);
+      }
+
+      if (cardData.filter(c => c.status === 'ready').length > 1) {
+        renderDownloadAll();
+      }
+
+      btn.disabled = false;
+      btn.textContent = 'Fetch';
+    }
+
+    function renderCard(idx) {
+      const c = cardData[idx];
+      let el = document.getElementById(`card-${idx}`);
+      if (!el) {
+        el = document.createElement('div');
+        el.id = `card-${idx}`;
+        el.className = 'card';
+        document.getElementById('cards').appendChild(el);
+      }
+
+      if (c.status === 'loading') {
+        el.className = 'card';
+        el.innerHTML = `
+          <div class="card-thumb loading"></div>
+          <div class="card-body">
+            <div class="skeleton-line medium"></div>
+            <div class="skeleton-line short"></div>
+          </div>
+        `;
+        return;
+      }
+
+      if (c.status === 'info-error') {
+        el.className = 'card card-error';
+        el.innerHTML = `
+          <div class="card-thumb">
+            <div class="card-error-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="card-title" style="color:var(--error)">Could not fetch video</div>
+            <div class="card-error-msg">${esc(friendlyError(c.error || ''))}</div>
+            <div class="card-error-url">${esc(c.url)}</div>
+          </div>
+        `;
+        return;
+      }
+
+      el.className = 'card';
+      const isAudio = currentFormat === 'audio';
+
+      let thumbHtml;
+      if (isAudio) {
+        thumbHtml = `<div class="no-thumb" style="color:var(--accent)"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>`;
+      } else if (c.thumbnail) {
+        thumbHtml = `<img src="${c.thumbnail}" alt="">`;
+      } else {
+        thumbHtml = `<div class="no-thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2"/><circle cx="8" cy="8" r="1.5"/><path d="m21 15-5-5L5 21"/></svg></div>`;
+      }
+
+      let qualityChips = '';
+      if (!isAudio && c.formats && c.formats.length > 1) {
+        qualityChips = c.formats.map(f =>
+          `<button class="q-chip${f.id === c.selectedFormatId ? ' active' : ''}" onclick="pickFormat(${idx}, '${f.id}')">${f.label}</button>`
+        ).join('');
+      }
+
+      let actionHtml = '';
+      if (c.status === 'ready') {
+        actionHtml = `<button class="card-dl-btn liquid-glass" onclick="dlCard(${idx})">Download</button>${qualityChips}`;
+      } else if (c.status === 'downloading') {
+        actionHtml = `<span class="card-status downloading"><span class="spin"></span> Downloading...</span>`;
+      } else if (c.status === 'transcribing') {
+        actionHtml = `<span class="card-status downloading"><span class="spin"></span> Transcribing AI...</span>`;
+      } else if (c.status === 'packaging') {
+        actionHtml = `<span class="card-status downloading"><span class="spin"></span> Packaging...</span>`;
+      } else if (c.status === 'done') {
+        actionHtml = `<button class="card-dl-btn done liquid-glass" onclick="saveCard(${idx})">Save</button>
+          <span class="card-status done">${esc(c.filename || '')}</span>`;
+      } else if (c.status === 'error') {
+        actionHtml = `<button class="card-dl-btn error liquid-glass" onclick="dlCard(${idx})">Retry</button>
+          <span class="card-status error">${esc(friendlyError(c.error || 'Download failed'))}</span>`;
+      }
+
+      el.innerHTML = `
+        <div class="card-thumb">${thumbHtml}</div>
+        <div class="card-body">
+          <div class="card-title">${esc(c.title || 'Untitled')}</div>
+          <div class="card-meta">${esc(c.uploader)}${c.duration ? ' · ' + fmtDur(c.duration) : ''}</div>
+          <div class="card-actions">${actionHtml}</div>
+        </div>
+      `;
+    }
+
+    function renderDownloadAll() {
+      const existing = document.getElementById('dl-all-bar');
+      if (existing) existing.remove();
+
+      const bar = document.createElement('div');
+      bar.id = 'dl-all-bar';
+      bar.className = 'dl-all-bar';
+      bar.innerHTML = `<button class="dl-all-btn liquid-glass" onclick="dlAll()">Download All</button>`;
+      document.getElementById('cards').appendChild(bar);
+    }
+
+    function pickFormat(idx, formatId) {
+      cardData[idx].selectedFormatId = formatId;
+      renderCard(idx);
+    }
+
+    async function dlCard(idx) {
+      const c = cardData[idx];
+      c.status = 'downloading';
+      c.error = null;
+      renderCard(idx);
+
+      try {
+        const res = await fetch('/api/download', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url: c.url,
+            format: currentFormat,
+            format_id: c.selectedFormatId,
+            title: c.title || '',
+          }),
+        });
+        const data = await res.json();
+        if (data.error) {
+          c.status = 'error';
+          c.error = data.error;
+          renderCard(idx);
+          return;
+        }
+        c.jobId = data.job_id;
+        pollCard(idx);
+      } catch (err) {
+        c.status = 'error';
+        c.error = err.message;
+        renderCard(idx);
+      }
+    }
+
+    function pollCard(idx) {
+      const c = cardData[idx];
+      const iv = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/status/${c.jobId}`);
+          const data = await res.json();
+          if (data.status === 'done') {
+            clearInterval(iv);
+            c.status = 'done';
+            c.filename = data.filename;
+            renderCard(idx);
+            saveCard(idx);
+          } else if (data.status === 'error') {
+            clearInterval(iv);
+            c.status = 'error';
+            c.error = data.error;
+            renderCard(idx);
+          }
+        } catch {
+          clearInterval(iv);
+          c.status = 'error';
+          c.error = 'Lost connection to server';
+          renderCard(idx);
+        }
+      }, 1000);
+    }
+
+    function saveCard(idx) {
+      const c = cardData[idx];
+      if (!c.jobId) return;
+      const a = document.createElement('a');
+      a.href = `/api/file/${c.jobId}`;
+      a.download = c.filename || '';
+      a.click();
+    }
+
+    async function dlAll() {
+      const btn = document.querySelector('.dl-all-btn');
+      if (btn) { btn.disabled = true; btn.textContent = 'Downloading...'; }
+
+      for (let i = 0; i < cardData.length; i++) {
+        if (cardData[i].status === 'ready') {
+          await dlCard(i);
+        }
+      }
+
+      if (btn) { btn.disabled = false; btn.textContent = 'Download All'; }
+    }
+  </script>
+</body>
+</html>
