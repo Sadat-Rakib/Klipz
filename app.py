@@ -7,6 +7,8 @@ import threading
 import zipfile
 import time
 import requests
+import urllib.request
+import random
 from flask import Flask, request, jsonify, send_file, render_template
 from dotenv import load_dotenv
 
@@ -34,6 +36,51 @@ DOWNLOAD_DIR = os.path.join(os.path.dirname(__file__), "downloads")
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
 jobs = {}
+
+# ── Proxy Manager ──────────────────────────────────────────
+_proxy_list = []
+_proxy_last_fetch = 0
+_proxy_ttl = 3600  # refresh every 1 hour
+
+def _fetch_webshare_proxies():
+    """Fetch fresh proxy list from Webshare API."""
+    global _proxy_list, _proxy_last_fetch
+    api_key = os.environ.get("WEBSHARE_API_KEY", "")
+    if not api_key:
+        return
+    try:
+        req = urllib.request.Request(
+            "https://proxy.webshare.io/api/v2/proxy/list/?mode=direct&page=1&page_size=25",
+            headers={"Authorization": f"Token {api_key}"}
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode())
+        proxies = []
+        for p in data.get("results", []):
+            if p.get("valid"):
+                host = p["proxy_address"]
+                port = p["port"]
+                user = p["username"]
+                pwd  = p["password"]
+                proxies.append(f"http://{user}:{pwd}@{host}:{port}")
+        if proxies:
+            _proxy_list = proxies
+            _proxy_last_fetch = time.time()
+            print(f"[proxy] loaded {len(_proxy_list)} proxies from Webshare")
+    except Exception as e:
+        print(f"[proxy] fetch failed: {e}")
+
+def get_proxy():
+    """Return a random proxy string, refreshing cache if stale."""
+    global _proxy_last_fetch
+    if not os.environ.get("WEBSHARE_API_KEY"):
+        return None
+    if time.time() - _proxy_last_fetch > _proxy_ttl or not _proxy_list:
+        _fetch_webshare_proxies()
+    if not _proxy_list:
+        return None
+    return random.choice(_proxy_list)
+# ───────────────────────────────────────────────────────────
 
 def response_to_srt(response):
     """Helper to convert Deepgram response to SRT format"""
@@ -66,6 +113,16 @@ def run_download(job_id, url, format_choice, format_id):
         "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "--extractor-args", "youtube:player_client=ios,web",
     ]
+
+    # Cookies (if available)
+    cookies_path = os.path.join(os.path.dirname(__file__), "cookies.txt")
+    if os.path.exists(cookies_path):
+        cmd += ["--cookies", cookies_path]
+
+    # Proxy (auto-rotated from Webshare)
+    proxy = get_proxy()
+    if proxy:
+        cmd += ["--proxy", proxy]
 
     if format_choice == "audio":
         cmd += ["-x", "--audio-format", "mp3", "--audio-quality", "0"]
@@ -218,6 +275,14 @@ def get_info():
         "--extractor-args", "youtube:player_client=ios,web",
         url
     ]
+
+    cookies_path = os.path.join(os.path.dirname(__file__), "cookies.txt")
+    if os.path.exists(cookies_path):
+        cmd += ["--cookies", cookies_path]
+
+    proxy = get_proxy()
+    if proxy:
+        cmd += ["--proxy", proxy]
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
         if result.returncode != 0:
@@ -304,6 +369,18 @@ def debug_job(job_id):
         return jsonify({"error": "Job not found"}), 404
     return jsonify(job)
 
+
+@app.route("/api/proxy-status")
+def proxy_status():
+    secret = os.environ.get("COOKIE_SECRET", "changeme123")
+    if request.args.get("secret") != secret:
+        return jsonify({"error": "unauthorized"}), 403
+    _fetch_webshare_proxies()
+    return jsonify({
+        "proxy_count": len(_proxy_list),
+        "proxies_loaded": bool(_proxy_list),
+        "api_key_set": bool(os.environ.get("WEBSHARE_API_KEY")),
+    })
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8899))
