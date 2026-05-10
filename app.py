@@ -59,7 +59,13 @@ def run_download(job_id, url, format_choice, format_id):
     job = jobs[job_id]
     out_template = os.path.join(DOWNLOAD_DIR, f"{job_id}.%(ext)s")
 
-    cmd = ["python", "-m", "yt_dlp", "--no-playlist", "-o", out_template]
+    cmd = [
+        "python", "-m", "yt_dlp", 
+        "--no-playlist", 
+        "-o", out_template,
+        "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "--extractor-args", "youtube:player_client=ios,web",
+    ]
 
     if format_choice == "audio":
         cmd += ["-x", "--audio-format", "mp3", "--audio-quality", "0"]
@@ -204,7 +210,14 @@ def get_info():
     if not url:
         return jsonify({"error": "No URL provided"}), 400
 
-    cmd = ["python", "-m", "yt_dlp", "--no-playlist", "-j", url]
+    cmd = [
+        "python", "-m", "yt_dlp", 
+        "--no-playlist", 
+        "-j", 
+        "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "--extractor-args", "youtube:player_client=ios,web",
+        url
+    ]
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
         if result.returncode != 0:

@@ -1,5 +1,5 @@
 flask
-yt-dlp
+yt-dlp>=2024.12.06
 deepgram-sdk
 python-dotenv
 requests
