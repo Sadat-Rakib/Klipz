@@ -5,10 +5,27 @@ import json
 import subprocess
 import threading
 import zipfile
+import time
+import requests
 from flask import Flask, request, jsonify, send_file, render_template
 from dotenv import load_dotenv
 
 load_dotenv()
+
+def keep_alive():
+    """Pings the app itself every 14 minutes to prevent Render spin-down"""
+    url = os.environ.get("RENDER_EXTERNAL_URL")
+    if not url:
+        return
+    time.sleep(20) # Wait for server to fully boot
+    while True:
+        try:
+            requests.get(url, timeout=10)
+        except:
+            pass
+        time.sleep(14 * 60) # 14 minutes
+
+threading.Thread(target=keep_alive, daemon=True).start()
 
 app = Flask(__name__)
 app.config['TEMPLATES_AUTO_RELOAD'] = True
